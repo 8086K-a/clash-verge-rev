@@ -1,6 +1,18 @@
 name: Development Test
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - "src/**"
+      - "src-tauri/**"
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/dev.yml"
   workflow_dispatch:
     inputs:
       run_windows:
@@ -65,18 +77,19 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Skip job if not selected
-        if: github.event.inputs[matrix.input] != 'true'
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs[matrix.input] != 'true' }}
         run: echo "Job ${{ matrix.id }} skipped as requested"
 
       - name: Checkout Repository
-        if: github.event.inputs[matrix.input] == 'true'
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs[matrix.input] == 'true' }}
         uses: actions/checkout@v6
 
       - name: Install Rust Stable
-        if: github.event.inputs[matrix.input] == 'true'
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs[matrix.input] == 'true' }}
         uses: dtolnay/rust-toolchain@1.91.0
 
       - name: Rust Cache
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs[matrix.input] == 'true' }}
         uses: Swatinem/rust-cache@v2
         with:
           save-if: ${{ github.ref == 'refs/heads/dev' }}
@@ -88,25 +101,26 @@ jobs:
           cache-workspace-crates: true
 
       - name: Install dependencies (ubuntu only)
-        if: matrix.os == 'ubuntu-22.04' && github.event.inputs[matrix.input] == 'true'
+        if: ${{ matrix.os == 'ubuntu-22.04' && (github.event_name != 'workflow_dispatch' || github.event.inputs[matrix.input] == 'true') }}
         run: |
           sudo apt-get update
           sudo apt-get install -y libxslt1.1 libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
 
       - uses: pnpm/action-setup@v4
         name: Install pnpm
-        if: github.event.inputs[matrix.input] == 'true'
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs[matrix.input] == 'true' }}
         with:
           run_install: false
 
       - name: Install Node
-        if: github.event.inputs[matrix.input] == 'true'
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs[matrix.input] == 'true' }}
         uses: actions/setup-node@v6
         with:
           node-version: "24.13.1"
           cache: "pnpm"
 
       - name: Pnpm Cache
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs[matrix.input] == 'true' }}
         uses: actions/cache@v5
         with:
           path: ~/.pnpm-store
@@ -116,17 +130,17 @@ jobs:
           lookup-only: true
 
       - name: Pnpm install and check
-        if: github.event.inputs[matrix.input] == 'true'
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs[matrix.input] == 'true' }}
         run: |
           pnpm i
           pnpm run prebuild ${{ matrix.target }}
 
       - name: Release ${{ env.TAG_CHANNEL }} Version
-        if: github.event.inputs[matrix.input] == 'true'
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs[matrix.input] == 'true' }}
         run: pnpm release-version ${{ env.TAG_NAME }}
 
       - name: Add Rust Target
-        if: github.event.inputs[matrix.input] == 'true'
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs[matrix.input] == 'true' }}
         run: |
           # Ensure cross target is installed for the pinned toolchain; fallback without explicit toolchain if needed
           rustup target add ${{ matrix.target }} --toolchain 1.91.0 || rustup target add ${{ matrix.target }}
@@ -134,7 +148,7 @@ jobs:
           echo "Rust target ${{ matrix.target }} installed."
 
       - name: Tauri build
-        if: github.event.inputs[matrix.input] == 'true'
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs[matrix.input] == 'true' }}
         uses: tauri-apps/tauri-action@v0
         env:
           NODE_OPTIONS: "--max_old_space_size=4096"
@@ -152,7 +166,7 @@ jobs:
           args: --target ${{ matrix.target }} -b ${{ matrix.bundle }}
 
       - name: Upload Artifacts (macOS)
-        if: matrix.os == 'macos-latest' && github.event.inputs[matrix.input] == 'true'
+        if: ${{ matrix.os == 'macos-latest' && (github.event_name != 'workflow_dispatch' || github.event.inputs[matrix.input] == 'true') }}
         uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.target }}
@@ -160,7 +174,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload Artifacts (Windows)
-        if: matrix.os == 'windows-latest' && github.event.inputs[matrix.input] == 'true'
+        if: ${{ matrix.os == 'windows-latest' && (github.event_name != 'workflow_dispatch' || github.event.inputs[matrix.input] == 'true') }}
         uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.target }}
@@ -168,7 +182,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload Artifacts (Linux)
-        if: matrix.os == 'ubuntu-22.04' && github.event.inputs[matrix.input] == 'true'
+        if: ${{ matrix.os == 'ubuntu-22.04' && (github.event_name != 'workflow_dispatch' || github.event.inputs[matrix.input] == 'true') }}
         uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.target }}
